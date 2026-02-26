@@ -8,6 +8,8 @@ import {
     calculateCredits,
 } from '../_lib/pipeline.js';
 
+export const maxDuration = 60; // Allow up to 60 seconds for pipeline work
+
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -50,13 +52,14 @@ export default async function handler(req, res) {
                 .update({ title: titleSnippet, updated_at: new Date().toISOString() })
                 .eq('id', sessionId);
 
-            res.status(201).json({ jobId: job.id });
+            // Await script generation BEFORE responding
+            try {
+                await runScriptGeneration(job.id, prompt);
+            } catch (e) {
+                console.error('[Script Gen Error]', job.id, e.message);
+            }
 
-            // Run async
-            runScriptGeneration(job.id, prompt).catch(e =>
-                console.error('[Script Gen Error]', job.id, e.message)
-            );
-            return;
+            return res.status(201).json({ jobId: job.id });
         }
 
         // GET /api/jobs/:id — get job state
@@ -127,25 +130,26 @@ export default async function handler(req, res) {
             }
 
             await supabaseAdmin.from('reel_jobs').update({ narration_approved: true }).eq('id', jobId);
-            res.json({ success: true });
 
-            (async () => {
-                try {
-                    const audioResult = await runAudioGeneration(jobId);
-                    const totalCredits = calculateCredits(audioResult.totalScenes);
-                    const { data: profile } = await supabaseAdmin.from('profiles').select('credits').eq('id', user.id).single();
+            // Await audio + image prompt generation BEFORE responding
+            try {
+                const audioResult = await runAudioGeneration(jobId);
+                const totalCredits = calculateCredits(audioResult.totalScenes);
+                const { data: profile } = await supabaseAdmin.from('profiles').select('credits').eq('id', user.id).single();
 
-                    if (profile && profile.credits < totalCredits) {
-                        await supabaseAdmin.from('reel_jobs').update({
-                            status: 'failed',
-                            error_message: `Not enough credits. Need ${totalCredits}, have ${profile.credits}.`,
-                        }).eq('id', jobId);
-                        return;
-                    }
-                    await runImagePromptGeneration(jobId);
-                } catch (e) { console.error('[Audio/Prompts Error]', jobId, e.message); }
-            })();
-            return;
+                if (profile && profile.credits < totalCredits) {
+                    await supabaseAdmin.from('reel_jobs').update({
+                        status: 'failed',
+                        error_message: `Not enough credits. Need ${totalCredits}, have ${profile.credits}.`,
+                    }).eq('id', jobId);
+                    return res.json({ success: true, message: 'Insufficient credits' });
+                }
+                await runImagePromptGeneration(jobId);
+            } catch (e) {
+                console.error('[Audio/Prompts Error]', jobId, e.message);
+            }
+
+            return res.json({ success: true, message: 'Script approved' });
         }
 
         // POST /api/jobs/:id/regenerate-script
@@ -153,9 +157,12 @@ export default async function handler(req, res) {
             const { data: job } = await supabaseUser.from('reel_jobs').select('prompt').eq('id', jobId).single();
             if (!job) return res.status(404).json({ error: 'Job not found' });
 
-            res.json({ success: true });
-            runScriptGeneration(jobId, job.prompt).catch(e => console.error('[Regen Error]', e.message));
-            return;
+            try {
+                await runScriptGeneration(jobId, job.prompt);
+            } catch (e) {
+                console.error('[Regen Error]', e.message);
+            }
+            return res.json({ success: true });
         }
 
         // POST /api/jobs/:id/approve-prompts
@@ -172,37 +179,51 @@ export default async function handler(req, res) {
             }
 
             await supabaseAdmin.from('reel_jobs').update({ image_prompts_approved: true }).eq('id', jobId);
-            res.json({ success: true });
-            runImageGeneration(jobId).catch(e => console.error('[Image Gen Error]', e.message));
-            return;
+
+            try {
+                await runImageGeneration(jobId);
+            } catch (e) {
+                console.error('[Image Gen Error]', e.message);
+            }
+            return res.json({ success: true });
         }
 
         // POST /api/jobs/:id/regenerate-prompts
         if (req.method === 'POST' && action === 'regenerate-prompts') {
             await supabaseAdmin.from('reel_scenes').delete().eq('job_id', jobId);
             await supabaseAdmin.from('reel_jobs').update({ status: 'generating_image_prompts' }).eq('id', jobId);
-            res.json({ success: true });
-            runImagePromptGeneration(jobId).catch(e => console.error('[Regen Error]', e.message));
-            return;
+
+            try {
+                await runImagePromptGeneration(jobId);
+            } catch (e) {
+                console.error('[Regen Error]', e.message);
+            }
+            return res.json({ success: true });
         }
 
         // POST /api/jobs/:id/retry-scene
         if (req.method === 'POST' && action === 'retry-scene') {
             const { sceneNum } = req.body || {};
             await supabaseAdmin.from('reel_scenes').update({ status: 'pending' }).eq('job_id', jobId).eq('scene_number', sceneNum);
-            res.json({ success: true });
-            runImageGeneration(jobId, sceneNum).catch(e => console.error('[Retry Error]', e.message));
-            return;
+
+            try {
+                await runImageGeneration(jobId, sceneNum);
+            } catch (e) {
+                console.error('[Retry Error]', e.message);
+            }
+            return res.json({ success: true });
         }
 
         // POST /api/jobs/:id/stitch
         if (req.method === 'POST' && action === 'stitch') {
             const { transition, animation, burnSubtitles, aspectRatio } = req.body || {};
-            res.json({ success: true });
-            runStitchingViaModal(jobId, { transition, animation, burnSubtitles, aspectRatio }).catch(e =>
-                console.error('[Stitch Error]', e.message)
-            );
-            return;
+
+            try {
+                await runStitchingViaModal(jobId, { transition, animation, burnSubtitles, aspectRatio });
+            } catch (e) {
+                console.error('[Stitch Error]', e.message);
+            }
+            return res.json({ success: true });
         }
 
         return res.status(404).json({ error: 'Not found' });
