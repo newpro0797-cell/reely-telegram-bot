@@ -27,9 +27,16 @@ export async function authenticate(req) {
     }
 
     const token = authHeader.split(' ')[1];
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+
+    // Create a temporary client to verify the JWT
+    const tempClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } }
+    });
+
+    const { data: { user }, error } = await tempClient.auth.getUser();
 
     if (error || !user) {
+        console.error('[API Auth] JWT Validation failed:', error?.message);
         return { error: 'Invalid or expired token', status: 401 };
     }
 
