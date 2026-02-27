@@ -9,10 +9,21 @@ async function authMiddleware(req, res, next) {
 
         const token = authHeader.split(' ')[1];
 
-        // Verify the JWT and get user info
-        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+        // Verify the JWT via a token-scoped client
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+        const tempClient = require('@supabase/supabase-js').createClient(
+            supabaseUrl,
+            supabaseAnonKey,
+            { global: { headers: { Authorization: `Bearer ${token}` } } }
+        );
+
+        const { data: { user }, error } = await tempClient.auth.getUser();
 
         if (error || !user) {
+            console.error('[Auth Middleware] JWT Validation failed:', error?.message || 'No user returned');
+            console.error('[Auth Middleware] Token prefix:', token.substring(0, 15) + '...');
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
 

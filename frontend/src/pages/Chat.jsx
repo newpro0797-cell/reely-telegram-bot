@@ -206,17 +206,28 @@ export default function Chat() {
                 timestamp: new Date().toISOString(),
             }]);
 
-            // Create job
-            const { jobId } = await apiPost('/jobs', { sessionId: sid, prompt });
-
-            // Add job message placeholder
+            // Add temporary job message placeholder so UI shows "Writing script..." instantly
+            const tempJobId = `temp-${Date.now()}`;
             setMessages(prev => [...prev, {
                 type: 'job',
-                job: { id: jobId, status: 'generating_script', prompt },
+                job: { id: tempJobId, status: 'generating_script', prompt },
                 timestamp: new Date().toISOString(),
                 videoUrl: null,
                 scenes: null,
             }]);
+
+            // Create job
+            const { jobId } = await apiPost('/jobs', { sessionId: sid, prompt });
+
+            // Fetch final state of the job since it might have already completed generating script
+            const finalJob = await apiGet(`/jobs/${jobId}`);
+
+            // Replace placeholder with final job
+            setMessages(prev => prev.map(m =>
+                (m.type === 'job' && m.job?.id === tempJobId)
+                    ? { ...m, job: finalJob }
+                    : m
+            ));
         } catch (err) {
             toast.error(err.message);
         } finally {
