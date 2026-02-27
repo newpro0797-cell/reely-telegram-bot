@@ -11,7 +11,10 @@ export default async function handler(req, res) {
     if (auth.error) return res.status(auth.status).json({ error: auth.error });
 
     const { user, supabaseUser } = auth;
-    const pathParts = (req.query.path || []);
+    let pathParts = req.query.path || [];
+    if (typeof pathParts === 'string') {
+        pathParts = pathParts.split('/');
+    }
     const sessionId = pathParts[0];
 
     try {
