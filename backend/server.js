@@ -24,6 +24,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'reely-backend' });
 });
 
+// Root health check for Render cron job ping
+app.get('/', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/admin', adminRoutes);
 
