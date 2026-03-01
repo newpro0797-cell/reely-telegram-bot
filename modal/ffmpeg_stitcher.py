@@ -189,4 +189,37 @@ def flask_app():
             "format": "mp4",
         })
 
+    @web_app.route("/compress", methods=["POST"])
+    def compress_video():
+        data = request.get_json(force=True)
+        video_base64 = data.get("video_base64")
+        if not video_base64:
+            return jsonify({"error": "video_base64 required"}), 400
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.mp4")
+            output_path = os.path.join(tmpdir, "output.mp4")
+            
+            with open(input_path, "wb") as f:
+                f.write(base64.b64decode(video_base64))
+
+            # Compress video to target < 25MB by forcing lower bitrate & downscaling
+            cmd = [
+                "ffmpeg", "-y", "-i", input_path,
+                "-vf", "scale=-2:854", # downscale to max 854p height
+                "-c:v", "libx264", "-crf", "32", "-preset", "faster",
+                "-c:a", "aac", "-b:a", "96k",
+                "-movflags", "+faststart",
+                output_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+
+            with open(output_path, "rb") as f:
+                video_bytes = f.read()
+
+        return jsonify({
+            "video": base64.b64encode(video_bytes).decode("utf-8"),
+            "format": "mp4",
+        })
+
     return web_app

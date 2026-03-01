@@ -1,122 +1,89 @@
-# Reely — AI Instagram Reel Creator
+# Reely Instagram Automation
 
-Full-stack multi-tenant SaaS for automating AI-powered Instagram Reel creation via a web chat interface.
+Reely has been refactored into a single-purpose automation system that converts Instagram Direct Messages into fully produced AI video responses.
 
-## Tech Stack
+## Architecture & Data Flow
 
-- **Frontend**: React 19 + Tailwind CSS v4 (Vite)
-- **Backend**: Vercel Serverless Functions (or Node.js Express via Docker)
-- **Database/Auth/Storage**: Supabase (PostgreSQL + Auth + Storage + Realtime)
-- **AI Images**: Z-Image-Turbo via Modal GPU endpoint
-- **AI Audio**: Kokoro TTS via Modal endpoint
-- **AI Video Stitching**: FFmpeg via Modal endpoint (Vercel) or native binary (Docker)
-- **LLM**: Google Gemini API
+1. **Webhook Ingestion**: Instagram pushes DMs to `/api/instagram/webhook`. 
+2. **Idempotency**: Message IDs are tracked in `inbound_messages` (Supabase). Duplicates are skipped. 
+3. **Queueing**: A job is created in the `video_jobs` table. The user is instantly sent a DM acknowledgment.
+4. **Worker Orchestration**: A background node worker (`backend/src/worker.js`) polls for queued jobs.
+5. **Generative Pipeline**:
+   - **Gemini**: Generates a narration script targeting the user's requested duration (max 45s, default 15s).
+   - **Kokoro TTS (Modal)**: Generates the audio voiceover. Audio length is strictly measured.
+   - **Gemini**: Dynamically computes `num_images = ceil(audio_length / 5)` and writes prompts.
+   - **ZImage (Modal)**: Generates images in parallel.
+   - **FFmpeg Stitching (Modal CPU)**: Combines audio and images into MP4. Downsizes and re-encodes if file is `> 25 MB`.
+6. **Delivery**: The final `< 25MB` video is uploaded to Supabase Storage and sent back as a video DM to the user.
 
----
+## Environment Variables
 
-## Deployment Options
+### Backend (`.env`)
+```
+SUPABASE_URL=...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
 
-### Option 1: Vercel (Recommended)
+# Generative AI APIs
+GEMINI_API_KEY=...
+MODAL_ZIMAGE_ENDPOINT=...
+MODAL_KOKORO_ENDPOINT=...
 
-Deploy the `frontend/` directory to Vercel. All API routes live as serverless functions under `frontend/api/`.
+# Modal FFmpeg Stitcher Endpoint
+MODAL_FFMPEG_ENDPOINT=...
 
-#### Prerequisites
-- Vercel account (Pro plan recommended for 300s function timeout)
-- 3 Modal endpoints deployed: Z-Image, Kokoro TTS, **FFmpeg Stitcher**
-- Supabase project
+# Instagram Graph API
+IG_ACCESS_TOKEN=...
+IG_VERIFY_TOKEN=your_custom_webhook_secret
+IG_APP_SECRET=your_facebook_app_secret
+```
 
-#### Steps
+### Frontend (`.env`)
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
 
+## Deployment & Configuration
+
+### 1. Database Migrations
+Run the Supabase SQL commands found in `backend/supabase/migration_v3.sql` to prepare the database schema for automation logging and queues.
+
+### 2. Modal Deployments
+The heavy generic compute (TTS, image generation, and FFmpeg) runs on Modal.
+To deploy the new FFmpeg CPU Stitcher with compression support:
 ```bash
-# 1. Deploy Modal endpoints
-pip install modal
-python3 -m modal setup
-python3 -m modal deploy modal/ffmpeg_stitcher.py   # NEW for Vercel
-python3 -m modal deploy zimage.py
-python3 -m modal deploy kokoro_tts.py
-
-# 2. Run Supabase migration
-# Paste backend/supabase/migration.sql into Supabase SQL Editor
-
-# 3. Disable email confirmation
-# Supabase Dashboard → Authentication → Providers → Email → OFF
-
-# 4. Deploy to Vercel
-cd frontend
-vercel deploy
+cd modal
+python3 -m modal deploy ffmpeg_stitcher.py
 ```
+> Copy the resulting REST URL and set it as `MODAL_FFMPEG_ENDPOINT` in your `.env`.
 
-#### Vercel Environment Variables
-
-| Variable | Value |
-|----------|-------|
-| `SUPABASE_URL` | `https://your-project.supabase.co` |
-| `SUPABASE_ANON_KEY` | Your anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Your service role key |
-| `ENCRYPTION_KEY` | `openssl rand -hex 32` |
-| `VITE_SUPABASE_URL` | Same as `SUPABASE_URL` |
-| `VITE_SUPABASE_ANON_KEY` | Same as `SUPABASE_ANON_KEY` |
-| `MODAL_FFMPEG_ENDPOINT` | Your FFmpeg Modal endpoint URL |
-
----
-
-### Option 2: Docker Compose
-
-Full self-hosted deployment with FFmpeg running natively in the container.
-
+### 3. Backend Worker
+Ensure your Node backend is constantly running. The backend acts as the HTTP webhook receiver and also spins up a background poller inside `backend/src/worker.js`.
 ```bash
-# 1. Configure environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# 2. Run Supabase migration
-# Paste backend/supabase/migration.sql into Supabase SQL Editor
-
-# 3. Start
-docker compose up --build
+cd backend
+npm install
+npm run start
 ```
 
-- Frontend: http://localhost:5173
-- Backend: http://localhost:3000
+### 4. Instagram Webhook Configuration
+- Go to Meta for Developers -> App Dashboard -> Webhooks.
+- Create a webhook subscription for `messages` underneath the Instagram object.
+- Provide the Callback URL: `https://your-domain.com/api/instagram/webhook`
+- Verify Token: Matches `IG_VERIFY_TOKEN` in your `.env`.
 
----
+## Development & Testing
 
-## Project Structure
+A simulated IG webhook trigger allows you to test the entire state machine end-to-end exactly as Facebook would hit it.
 
-```
-Reely/
-├── docker-compose.yml          # Docker deployment
-├── .env.example
-├── modal/
-│   └── ffmpeg_stitcher.py      # FFmpeg Modal endpoint (for Vercel)
-├── backend/                    # Express backend (Docker mode)
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── server.js
-│   ├── supabase/migration.sql
-│   └── src/
-│       ├── config/supabase.js
-│       ├── middleware/auth.js
-│       ├── utils/encryption.js
-│       ├── routes/{workflows,runs,pipeline}.js
-│       └── pipeline/{index,gemini,kokoro,zimage,ffmpeg,storage}.js
-└── frontend/                   # Vite + React (deploys to Vercel)
-    ├── vercel.json             # Vercel config
-    ├── Dockerfile              # Docker alternative
-    ├── package.json
-    ├── vite.config.js
-    ├── index.html
-    ├── api/                    # Vercel Serverless Functions
-    │   ├── _lib/{supabase,encryption,pipeline}.js
-    │   ├── workflows/[[...path]].js
-    │   ├── runs/[...path].js
-    │   └── pipeline/[...path].js
-    └── src/
-        ├── main.jsx, App.jsx, index.css
-        ├── lib/{supabase,api}.js
-        ├── contexts/AuthContext.jsx
-        ├── components/{Layout,Sidebar,ProtectedRoute,
-        │              PipelineStepper,VideoPlayerCard}.jsx
-        └── pages/{SignIn,SignUp,Dashboard,WorkflowWizard,
-                   Chat,RunHistory,VideoDetail}.jsx
+1. Start your local environment (`npm run dev` in frontend, `node server.js` in backend).
+2. Go to `http://localhost:5173/playground`. 
+3. Send a simulated message.
+4. Watch the `Dashboard` for live job processing timeline.
+
+### Unit Tests
+To verify core timing and pagination math constraints:
+```bash
+cd backend
+node tests.js
 ```

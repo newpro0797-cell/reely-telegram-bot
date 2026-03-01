@@ -20,7 +20,7 @@ function safeParseJSON(text) {
     throw new Error('Failed to parse Gemini response as JSON. Raw: ' + text.substring(0, 200));
 }
 
-const SCRIPT_SYSTEM_INSTRUCTION = `You are a video script writer for Instagram Reels. Write an engaging, natural narration script for a short vertical video based on the user's prompt.
+const SCRIPT_SYSTEM_INSTRUCTION = `You are a video script writer for Telegram Videos. Write an engaging, natural narration script for a short vertical video based on the user's prompt.
 The script must be suitable for text-to-speech and 15–90 seconds when spoken at normal pace (roughly 2.5 words per second).
 Return only a JSON object:
 { "video_title": "...", "narration_script": "..." }
@@ -29,7 +29,7 @@ Write conversational, engaging language suitable for Gen Z audience.`;
 
 const SCENE_SYSTEM_INSTRUCTION = `Given this narration script and scene count, generate one cinematic image prompt per scene that visually tells the story in sequence. Return JSON:
 { "scenes": [ { "scene_number": N, "image_prompt": "...", "narration_segment": "..." }, ... ] }
-Style: photorealistic, vertical 9:16, cinematic lighting, Instagram-quality.
+Style: photorealistic, vertical 9:16, cinematic lighting, high-quality.
 Every prompt must be unique and describe a specific visual moment. All prompts must be different from each other.`;
 
 async function generateScript(userPrompt) {

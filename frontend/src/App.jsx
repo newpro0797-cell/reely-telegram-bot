@@ -6,7 +6,10 @@ import Layout from './components/Layout';
 import Landing from './pages/Landing';
 import SignUp from './pages/SignUp';
 import SignIn from './pages/SignIn';
-import Chat from './pages/Chat';
+import Dashboard from './pages/Dashboard';
+import JobDetails from './pages/JobDetails';
+import Settings from './pages/Settings';
+import Playground from './pages/Playground';
 
 export default function App() {
     return (
@@ -18,11 +21,13 @@ export default function App() {
                     <Route path="/signup" element={<SignUp />} />
                     <Route path="/signin" element={<SignIn />} />
 
-                    {/* Protected */}
+                    {/* Protected Admin Console */}
                     <Route element={<ProtectedRoute />}>
                         <Route element={<Layout />}>
-                            <Route path="/chat" element={<Chat />} />
-                            <Route path="/chat/:sessionId" element={<Chat />} />
+                            <Route path="/" element={<Dashboard />} />
+                            <Route path="/job/:jobId" element={<JobDetails />} />
+                            <Route path="/settings" element={<Settings />} />
+                            <Route path="/playground" element={<Playground />} />
                         </Route>
                     </Route>
                 </Routes>

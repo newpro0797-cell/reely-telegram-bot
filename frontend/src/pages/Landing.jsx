@@ -42,7 +42,7 @@ export default function Landing() {
                     </div>
                     <h1 className="text-5xl lg:text-7xl font-extrabold text-[var(--color-text)] leading-[1.1] tracking-tight">
                         Turn any idea into an
-                        <span className="text-[var(--color-primary)]"> Instagram Reel</span> in minutes
+                        <span className="text-[var(--color-primary)]"> Telegram Video</span> in minutes
                     </h1>
                     <p className="mt-6 text-lg lg:text-xl text-[var(--color-text-secondary)] max-w-2xl mx-auto leading-relaxed">
                         Just type a prompt. AI writes the script, generates images,
@@ -177,7 +177,7 @@ export default function Landing() {
                         Ready to create your first reel?
                     </h2>
                     <p className="mt-4 text-[var(--color-text-secondary)]">
-                        Sign up free and get 200 credits to start creating amazing Instagram Reels.
+                        Sign up free and get 200 credits to start creating amazing Telegram Videos.
                     </p>
                     <Link to="/signup" className="btn-primary text-lg px-8 py-3.5 rounded-xl mt-8 inline-flex shadow-lg shadow-[var(--color-primary)]/20">
                         Start Creating Free <ArrowRight size={18} />
@@ -193,7 +193,7 @@ export default function Landing() {
                         <span className="font-semibold text-[var(--color-text)]">Reely</span>
                     </div>
                     <p className="text-sm text-[var(--color-text-muted)]">
-                        © {new Date().getFullYear()} Reely. AI-powered Instagram Reel creator.
+                        © {new Date().getFullYear()} Reely. AI-powered Telegram Video creator.
                     </p>
                 </div>
             </footer>
