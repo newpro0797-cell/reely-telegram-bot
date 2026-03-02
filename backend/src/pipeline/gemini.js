@@ -32,8 +32,17 @@ const SCENE_SYSTEM_INSTRUCTION = `Given this narration script and scene count, g
 Style: photorealistic, vertical 9:16, cinematic lighting, high-quality.
 Every prompt must be unique and describe a specific visual moment. All prompts must be different from each other.`;
 
-const OPTIMIZE_PROMPT_SYSTEM_INSTRUCTION = `You are an expert video producer and prompt engineer. Your task is to take a user's short idea for a vertical video and optimize it into a detailed, highly descriptive prompt suitable for generating a narration script and image prompts.
-Analyze the user's idea and expand on it, adding vivid imagery, emotional tone, and specific visual details while maintaining the core concept.
+const OPTIMIZE_PROMPT_SYSTEM_INSTRUCTION = `Convert this into a clear, engaging explainer-style Instagram Reel prompt.
+
+Structure it as:
+Hook (0–3 sec)
+Core explanation (3–15 sec)
+Key benefits or proof
+Myth-busting (if relevant)
+CTA (last 5 seconds)
+
+Make the language simple, confident, and authoritative.
+Add on-screen text highlights and subtitle style suggestions.
 Return ONLY the optimized prompt text. Do not include any explanations, JSON formatting, or conversational text.`;
 
 async function generateScript(userPrompt) {
@@ -121,7 +130,7 @@ async function optimizePrompt(userPrompt) {
         contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
         generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 4096,
         },
     });
 
