@@ -32,6 +32,10 @@ const SCENE_SYSTEM_INSTRUCTION = `Given this narration script and scene count, g
 Style: photorealistic, vertical 9:16, cinematic lighting, high-quality.
 Every prompt must be unique and describe a specific visual moment. All prompts must be different from each other.`;
 
+const OPTIMIZE_PROMPT_SYSTEM_INSTRUCTION = `You are an expert video producer and prompt engineer. Your task is to take a user's short idea for a vertical video and optimize it into a detailed, highly descriptive prompt suitable for generating a narration script and image prompts.
+Analyze the user's idea and expand on it, adding vivid imagery, emotional tone, and specific visual details while maintaining the core concept.
+Return ONLY the optimized prompt text. Do not include any explanations, JSON formatting, or conversational text.`;
+
 async function generateScript(userPrompt) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey || apiKey.length < 10) {
@@ -101,4 +105,28 @@ Generate exactly ${totalScenes} scene image prompts.`;
     return parsed;
 }
 
-module.exports = { generateScript, generateScenePrompts };
+async function optimizePrompt(userPrompt) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey.length < 10) {
+        throw new Error('GEMINI_API_KEY is not configured on the server.');
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const genModel = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        systemInstruction: OPTIMIZE_PROMPT_SYSTEM_INSTRUCTION,
+    });
+
+    const result = await genModel.generateContent({
+        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+        generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 1024,
+        },
+    });
+
+    const responseText = result.response.text();
+    return responseText.trim();
+}
+
+module.exports = { generateScript, generateScenePrompts, optimizePrompt };
