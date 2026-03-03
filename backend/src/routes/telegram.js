@@ -138,19 +138,14 @@ async function processPromptOptimization(inboundMsgId, senderId) {
             return;
         }
 
-        // Convert Gemini's basic markdown (**bold**, *italic*) to HTML for Telegram
-        let formattedText = optimizedText
-            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>') // Bold
-            .replace(/\*(.*?)\*/g, '<i>$1</i>');    // Italic
-
         // Send optimized prompt and approve button
-        await sendTelegramTextMessage(senderId, `Here is the optimized prompt:\n\n${formattedText}`, {
+        await sendTelegramTextMessage(senderId, `Here is the optimized prompt:\n\n${optimizedText}`, {
             inline_keyboard: [
                 [
                     { text: "Approve \u2705", callback_data: `use_${newInboundMsg.id}` }
                 ]
             ]
-        }, 'HTML');
+        });
 
     } catch (error) {
         console.error('Error optimizing prompt:', error);
@@ -199,7 +194,7 @@ async function enqueueVideoJob(inboundMsgId, senderId) {
     }
 }
 
-async function sendTelegramTextMessage(chatId, text, replyMarkup = null, parseMode = null) {
+async function sendTelegramTextMessage(chatId, text, replyMarkup = null) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
         console.warn("[DryRun] Would send Telegram text:", text);
@@ -213,10 +208,6 @@ async function sendTelegramTextMessage(chatId, text, replyMarkup = null, parseMo
 
     if (replyMarkup) {
         payload.reply_markup = replyMarkup;
-    }
-
-    if (parseMode) {
-        payload.parse_mode = parseMode;
     }
 
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
